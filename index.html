@@ -890,7 +890,7 @@
     <script>
         const CONFIG = {
             GOOGLE_SCRIPT_URL: 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE',
-            GHL_WEBHOOK_URL: https://services.leadconnectorhq.com/hooks/iI5zC7sTaWnQS5BTbGjE/webhook-trigger/wlQjt6IV09EqC8ooIguO
+            GHL_WEBHOOK_URL: 'https://services.leadconnectorhq.com/hooks/iI5zC7sTaWnQS5BTbGjE/webhook-trigger/wlQjt6IV09EqC8ooIguO',
             SEND_DIRECT_TO_GHL: false
         };
 
@@ -971,21 +971,22 @@
                     });
                 }
                 
-                // Send to GoHighLevel
+                // Send to GoHighLevel - JSON format matching the working curl command
                 if (CONFIG.GHL_WEBHOOK_URL !== 'YOUR_GHL_WEBHOOK_URL_HERE') {
-                    const ghlData = new URLSearchParams();
-                    ghlData.append('first_name', data.firstName);
-                    ghlData.append('last_name', data.lastName);
-                    ghlData.append('phone', data.phone);
-                    ghlData.append('email', data.email);
-                    ghlData.append('source', data.source);
-                    ghlData.append('instant_refund', data.instantRefund || '');
-                    ghlData.append('catch_up_taxes', data.catchUpTaxes || '');
-                    
                     fetch(CONFIG.GHL_WEBHOOK_URL, {
                         method: 'POST',
-                        mode: 'no-cors',
-                        body: ghlData
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            first_name: data.firstName,
+                            last_name: data.lastName,
+                            phone: data.phone,
+                            email: data.email,
+                            source: data.source,
+                            instant_refund: data.instantRefund || '',
+                            catch_up_taxes: data.catchUpTaxes || ''
+                        })
                     });
                 }
                 
