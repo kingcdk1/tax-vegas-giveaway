@@ -973,17 +973,18 @@
                 
                 // Send to GoHighLevel
                 if (CONFIG.GHL_WEBHOOK_URL !== 'YOUR_GHL_WEBHOOK_URL_HERE') {
-                    const ghlData = new FormData();
+                    const ghlData = new URLSearchParams();
                     ghlData.append('first_name', data.firstName);
                     ghlData.append('last_name', data.lastName);
                     ghlData.append('phone', data.phone);
                     ghlData.append('email', data.email);
                     ghlData.append('source', data.source);
-                    ghlData.append('instant_refund', data.instantRefund);
-                    ghlData.append('catch_up_taxes', data.catchUpTaxes);
+                    ghlData.append('instant_refund', data.instantRefund || '');
+                    ghlData.append('catch_up_taxes', data.catchUpTaxes || '');
                     
                     fetch(CONFIG.GHL_WEBHOOK_URL, {
                         method: 'POST',
+                        mode: 'no-cors',
                         body: ghlData
                     });
                 }
