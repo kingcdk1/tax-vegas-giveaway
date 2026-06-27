@@ -1414,6 +1414,27 @@
                     });
                 }
                 
+                // Own-data lead log + email — runs in parallel, isolated; cannot affect the GHL call above
+                try {
+                    fetch('https://giveaway-leads.vercel.app/api/lead', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'giveaway',
+                            name: (data.firstName + ' ' + data.lastName).trim(),
+                            phone: data.phone,
+                            email: data.email,
+                            fields: {
+                                instantRefund: data.instantRefund || '',
+                                catchUpTaxes: data.catchUpTaxes || '',
+                                ref: (new URLSearchParams(location.search).get('ref') || ''),
+                                source: data.source,
+                                page_url: data.page_url
+                            }
+                        })
+                    }).catch(function(){});
+                } catch (e) {}
+
                 // Fire Meta Pixel Lead event
                 if (typeof fbq !== 'undefined') {
                     fbq('track', 'Lead', {
