@@ -90,19 +90,22 @@
             color: var(--dark);
         }
 
-        /* Discreet team back-end link (row 8) — quiet so customers ignore it */
+        /* Team back-end link (row 8) — visible pill, matches the website button */
         .team-link {
             display: inline-block;
             margin-top: 8px;
             margin-left: 10px;
-            font-size: 0.72rem;
+            padding: 6px 22px;
+            font-size: 0.85rem;
             font-weight: 600;
-            color: rgba(148, 163, 184, 0.55);
+            color: var(--gold);
             text-decoration: none;
+            border: 1px solid var(--gold);
+            border-radius: 50px;
             letter-spacing: 0.5px;
-            transition: opacity 0.3s ease, color 0.3s ease;
+            transition: all 0.3s ease;
         }
-        .team-link:hover { color: var(--gold); }
+        .team-link:hover { background: var(--gold); color: var(--dark); }
 
         /* Hero Section - 3 Column */
         .hero-grid {
