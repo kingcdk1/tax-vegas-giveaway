@@ -90,6 +90,20 @@
             color: var(--dark);
         }
 
+        /* Discreet team back-end link (row 8) — quiet so customers ignore it */
+        .team-link {
+            display: inline-block;
+            margin-top: 8px;
+            margin-left: 10px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: rgba(148, 163, 184, 0.55);
+            text-decoration: none;
+            letter-spacing: 0.5px;
+            transition: opacity 0.3s ease, color 0.3s ease;
+        }
+        .team-link:hover { color: var(--gold); }
+
         /* Hero Section - 3 Column */
         .hero-grid {
             display: grid;
@@ -967,6 +981,7 @@
             <img src="PCS_TAX_AND_ACADEMEY_LOGO.jpg" alt="PCS Tax Service & Academy" class="logo">
             <br>
             <a href="https://www.pcstaxservice.com/" target="_blank" class="header-website">🌐 www.pcstaxservice.com</a>
+            <a href="leads.html" class="team-link" title="Team back end">Team</a>
         </header>
 
         <!-- Hero Grid: Refund LEFT | Casino CENTER | Slots RIGHT -->
