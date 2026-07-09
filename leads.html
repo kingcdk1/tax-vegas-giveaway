@@ -41,7 +41,10 @@
   .muted{color:var(--muted)} .small{font-size:12.5px}
   .recip{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap}
   .recip input[type=text],.recip input[type=email],.addrow input{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13.5px;font-family:inherit}
-  .recip .lbl{width:130px}.recip .eml{flex:1;min-width:220px}
+  .recip .lbl{width:110px}.recip .eml{flex:1;min-width:150px}
+  .tlbl{font-size:15px;flex:0 0 auto;opacity:.85}
+  .heartbeat{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#fca5a5;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13.5px;font-weight:600;cursor:pointer;animation:hb 1.6s ease-in-out infinite}
+  @keyframes hb{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,.45)}50%{box-shadow:0 0 0 9px rgba(248,113,113,0)}}
   .switch{position:relative;width:46px;height:24px;flex:0 0 auto}
   .switch input{opacity:0;width:0;height:0}
   .slider{position:absolute;inset:0;background:#3a3f4d;border-radius:99px;cursor:pointer;transition:.2s}
@@ -76,6 +79,7 @@
   <!-- APP -->
   <div id="app" style="display:none">
     <div class="flash" id="flash"></div>
+    <div id="heartbeat" class="heartbeat" style="display:none">🫀 <strong>Maintenance Heartbeat</strong> — <span id="hbText"></span></div>
 
     <div class="card">
       <h2>Entries <span class="muted small" id="count"></span></h2>
@@ -97,21 +101,15 @@
       <div class="note" id="emptyNote" style="display:none">No entries yet — they'll appear the moment one comes in (they also email whoever's toggled on below, and GoHighLevel still gets them on the page).</div>
     </div>
 
-    <div class="card" id="notifyCard" style="display:none">
-      <h2>Where Leads Go — notification recipients</h2>
+    <div class="card" id="teamCard" style="display:none">
+      <h2>Team — 📧 Email &amp; 👁 See Leads</h2>
       <div id="recips"></div>
       <div class="addrow">
-        <input type="text" id="newLbl" placeholder="Name (e.g. Sandra)">
-        <input type="email" id="newEml" placeholder="email@gmail.com">
-        <button class="btn btn-gold" id="addBtn">Add recipient</button>
+        <input type="text" id="newLbl" placeholder="Name (e.g. Tyson)">
+        <input type="email" id="newEml" placeholder="their-gmail@gmail.com">
+        <button class="btn btn-gold" id="addBtn">Add person</button>
       </div>
-      <div class="note">Toggle OFF = stays saved, stops receiving. Only admins see this panel. Changes save instantly and the email sender reads this list.</div>
-    </div>
-
-    <div class="card" id="accessCard" style="display:none">
-      <h2>Who Can See the Leads — team access</h2>
-      <div id="accessList"></div>
-      <div class="note">Toggle ON = this person can log in and see/work the leads. OFF = they can sign in but see nothing. Admins always have full access. This is separate from the email notifications above — someone can get emails without seeing the back end, or see the back end without getting emails.</div>
+      <div class="note"><strong>📧 = gets the lead alert emails.</strong> &nbsp; <strong>👁 = can log in and see/work the leads.</strong> Two separate switches — someone can see without emails, or get emails without seeing. Add everyone on the team here; they show up the moment you add their Gmail (they don't have to log in first). Flip whatever you want. Admins always have full access.</div>
     </div>
 
     <div class="card">
@@ -142,7 +140,7 @@ function yn(v){ if(v==null||v==='')return '<span class="no">—</span>'; const s
 
 $('googleBtn').onclick = () => db.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: location.origin + location.pathname }});
 $('outBtn').onclick = async () => { await db.auth.signOut(); location.reload(); };
-$('refreshBtn').onclick = () => { loadLeads(); loadRecipients(); loadAccess(); };
+$('refreshBtn').onclick = () => { loadLeads(); loadTeam(); loadHeartbeat(); };
 $('search').oninput = renderLeads;
 $('csvBtn').onclick = downloadCSV; $('xlsxBtn').onclick = downloadXLSX; $('pdfBtn').onclick = downloadPDF;
 
@@ -153,7 +151,7 @@ function render(session){
   if(!session){ $('gate').style.display='block'; $('app').style.display='none'; $('outBtn').style.display='none'; $('who').textContent=''; return; }
   $('gate').style.display='none'; $('app').style.display='block'; $('outBtn').style.display='inline-block';
   $('who').textContent = session.user.email;
-  loadLeads(); loadRecipients(); loadAccess();
+  loadLeads(); loadTeam(); loadHeartbeat();
 }
 
 async function loadLeads(){
@@ -194,65 +192,56 @@ function renderLeads(){
   });
 }
 
-async function loadRecipients(){
+async function loadTeam(){
   const { data, error } = await db.from('notify_recipients').select('*').order('label');
-  if(error || !data || !data.length){ $('notifyCard').style.display='none'; return; }
-  $('notifyCard').style.display='block';
+  if(error || !data || !data.length){ $('teamCard').style.display='none'; return; }
+  $('teamCard').style.display='block';
   const box = $('recips'); box.innerHTML='';
   for(const r of data){
     const row = document.createElement('div'); row.className='recip';
     row.innerHTML = `<input type="text" class="lbl" value="${esc(r.label)||''}" data-id="${r.id}" data-f="label">
       <input type="email" class="eml" value="${esc(r.email)}" data-id="${r.id}" data-f="email">
-      <label class="switch"><input type="checkbox" ${r.enabled?'checked':''} data-id="${r.id}" data-f="enabled"><span class="slider"></span></label>
+      <span class="tlbl" title="Gets the lead alert emails">📧</span><label class="switch"><input type="checkbox" ${r.enabled?'checked':''} data-id="${r.id}" data-f="enabled"><span class="slider"></span></label>
+      <span class="tlbl" title="Can log in and see the leads">👁</span><label class="switch"><input type="checkbox" ${r.access?'checked':''} data-id="${r.id}" data-f="access"><span class="slider"></span></label>
       <button class="btn btn-ghost small" data-del="${r.id}">Remove</button>`;
     box.appendChild(row);
   }
   box.querySelectorAll('input[data-f]').forEach(inp => inp.onchange = async e => {
-    const v = e.target.dataset.f==='enabled' ? e.target.checked : e.target.value.trim();
-    const { error } = await db.from('notify_recipients').update({[e.target.dataset.f]:v, updated_at:new Date().toISOString()}).eq('id', e.target.dataset.id);
+    const f = e.target.dataset.f;
+    const v = (f==='enabled'||f==='access') ? e.target.checked : e.target.value.trim();
+    const { error } = await db.from('notify_recipients').update({[f]:v, updated_at:new Date().toISOString()}).eq('id', e.target.dataset.id);
     error ? flash('Save failed: '+error.message,false) : flash('Saved.');
   });
   box.querySelectorAll('button[data-del]').forEach(b => b.onclick = async () => {
-    if(!confirm('Remove this recipient? (Toggling OFF keeps them saved instead)')) return;
+    if(!confirm('Remove this person from the team list?')) return;
     const { error } = await db.from('notify_recipients').delete().eq('id', b.dataset.del);
-    error ? flash('Remove failed: '+error.message,false) : (flash('Removed.'), loadRecipients());
+    error ? flash('Remove failed: '+error.message,false) : (flash('Removed.'), loadTeam());
   });
 }
 
 $('addBtn').onclick = async () => {
   const label = $('newLbl').value.trim(), email = $('newEml').value.trim();
   if(!email){ flash('Enter an email.', false); return; }
-  const { error } = await db.from('notify_recipients').insert({label, email, enabled:true});
-  error ? flash('Add failed: '+error.message,false) : (flash('Added — toggled ON.'), $('newLbl').value='', $('newEml').value='', loadRecipients());
+  const { error } = await db.from('notify_recipients').insert({label, email, enabled:true, access:true});
+  error ? flash('Add failed: '+error.message,false) : (flash('Added — 📧 and 👁 both ON.'), $('newLbl').value='', $('newEml').value='', loadTeam());
 };
 
-// ---- Toggle 2: who can SEE the leads (admin-only) ----
-async function loadAccess(){
-  const { data:{ user } } = await db.auth.getUser();
-  const { data, error } = await db.from('profiles').select('id,email,role').order('email');
-  if(error || !data){ $('accessCard').style.display='none'; return; }
-  const me = data.find(p => p.id === (user && user.id));
-  if(!me || me.role !== 'admin'){ $('accessCard').style.display='none'; return; }  // admin-only panel
-  $('accessCard').style.display='block';
-  const box = $('accessList'); box.innerHTML='';
-  for(const p of data){
-    const row = document.createElement('div'); row.className='recip';
-    if(p.role === 'admin'){
-      row.innerHTML = `<span class="eml">${esc(p.email)||esc(p.id)}</span>
-        <span class="small" style="color:var(--gold);font-weight:600">Admin — full access</span>`;
-    } else {
-      const on = p.role === 'manager';
-      row.innerHTML = `<span class="eml">${esc(p.email)||esc(p.id)}</span>
-        <label class="switch"><input type="checkbox" ${on?'checked':''} data-id="${p.id}"><span class="slider"></span></label>
-        <span class="small muted" style="min-width:70px">${on?'can see':'no access'}</span>`;
-    }
-    box.appendChild(row);
-  }
-  box.querySelectorAll('input[type=checkbox]').forEach(inp => inp.onchange = async e => {
-    const role = e.target.checked ? 'manager' : 'staff';
-    const { error } = await db.from('profiles').update({ role }).eq('id', e.target.dataset.id);
-    error ? flash('Access update failed: '+error.message, false) : (flash('Access updated.'), loadAccess());
-  });
+// ---- Maintenance Heartbeat (admin-only): flags new sign-ins not on the team list ----
+async function loadHeartbeat(){
+  const hb = $('heartbeat');
+  try {
+    const { data:{ user } } = await db.auth.getUser();
+    const { data:me } = await db.from('profiles').select('role').eq('id', user.id).single();
+    if(!me || me.role !== 'admin'){ hb.style.display='none'; return; }   // admins only
+    const { data:profs } = await db.from('profiles').select('email');
+    const { data:team } = await db.from('notify_recipients').select('email');
+    const roster = new Set((team||[]).map(t => (t.email||'').toLowerCase().trim()));
+    const newbies = (profs||[]).filter(p => p.email && !roster.has(p.email.toLowerCase().trim()));
+    if(!newbies.length){ hb.style.display='none'; return; }
+    hb.style.display='block';
+    $('hbText').textContent = newbies.length+' person'+(newbies.length>1?'s':'')+' signed in but '+(newbies.length>1?"aren't":"isn't")+' on the team list yet ('+newbies.map(n=>n.email).join(', ')+'). Add them below and set their toggles.';
+    hb.onclick = () => $('teamCard').scrollIntoView({behavior:'smooth'});
+  } catch(e){ hb.style.display='none'; }
 }
 
 // ---- downloads ----
