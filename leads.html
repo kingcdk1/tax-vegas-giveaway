@@ -108,6 +108,12 @@
       <div class="note">Toggle OFF = stays saved, stops receiving. Only admins see this panel. Changes save instantly and the email sender reads this list.</div>
     </div>
 
+    <div class="card" id="accessCard" style="display:none">
+      <h2>Who Can See the Leads — team access</h2>
+      <div id="accessList"></div>
+      <div class="note">Toggle ON = this person can log in and see/work the leads. OFF = they can sign in but see nothing. Admins always have full access. This is separate from the email notifications above — someone can get emails without seeing the back end, or see the back end without getting emails.</div>
+    </div>
+
     <div class="card">
       <h2>Instructions &amp; Training</h2>
       <div class="note">
@@ -136,7 +142,7 @@ function yn(v){ if(v==null||v==='')return '<span class="no">—</span>'; const s
 
 $('googleBtn').onclick = () => db.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: location.origin + location.pathname }});
 $('outBtn').onclick = async () => { await db.auth.signOut(); location.reload(); };
-$('refreshBtn').onclick = () => { loadLeads(); loadRecipients(); };
+$('refreshBtn').onclick = () => { loadLeads(); loadRecipients(); loadAccess(); };
 $('search').oninput = renderLeads;
 $('csvBtn').onclick = downloadCSV; $('xlsxBtn').onclick = downloadXLSX; $('pdfBtn').onclick = downloadPDF;
 
@@ -147,7 +153,7 @@ function render(session){
   if(!session){ $('gate').style.display='block'; $('app').style.display='none'; $('outBtn').style.display='none'; $('who').textContent=''; return; }
   $('gate').style.display='none'; $('app').style.display='block'; $('outBtn').style.display='inline-block';
   $('who').textContent = session.user.email;
-  loadLeads(); loadRecipients();
+  loadLeads(); loadRecipients(); loadAccess();
 }
 
 async function loadLeads(){
@@ -219,6 +225,35 @@ $('addBtn').onclick = async () => {
   const { error } = await db.from('notify_recipients').insert({label, email, enabled:true});
   error ? flash('Add failed: '+error.message,false) : (flash('Added — toggled ON.'), $('newLbl').value='', $('newEml').value='', loadRecipients());
 };
+
+// ---- Toggle 2: who can SEE the leads (admin-only) ----
+async function loadAccess(){
+  const { data:{ user } } = await db.auth.getUser();
+  const { data, error } = await db.from('profiles').select('id,email,role').order('email');
+  if(error || !data){ $('accessCard').style.display='none'; return; }
+  const me = data.find(p => p.id === (user && user.id));
+  if(!me || me.role !== 'admin'){ $('accessCard').style.display='none'; return; }  // admin-only panel
+  $('accessCard').style.display='block';
+  const box = $('accessList'); box.innerHTML='';
+  for(const p of data){
+    const row = document.createElement('div'); row.className='recip';
+    if(p.role === 'admin'){
+      row.innerHTML = `<span class="eml">${esc(p.email)||esc(p.id)}</span>
+        <span class="small" style="color:var(--gold);font-weight:600">Admin — full access</span>`;
+    } else {
+      const on = p.role === 'manager';
+      row.innerHTML = `<span class="eml">${esc(p.email)||esc(p.id)}</span>
+        <label class="switch"><input type="checkbox" ${on?'checked':''} data-id="${p.id}"><span class="slider"></span></label>
+        <span class="small muted" style="min-width:70px">${on?'can see':'no access'}</span>`;
+    }
+    box.appendChild(row);
+  }
+  box.querySelectorAll('input[type=checkbox]').forEach(inp => inp.onchange = async e => {
+    const role = e.target.checked ? 'manager' : 'staff';
+    const { error } = await db.from('profiles').update({ role }).eq('id', e.target.dataset.id);
+    error ? flash('Access update failed: '+error.message, false) : (flash('Access updated.'), loadAccess());
+  });
+}
 
 // ---- downloads ----
 function rowsForExport(){
