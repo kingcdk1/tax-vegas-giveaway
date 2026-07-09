@@ -190,7 +190,7 @@ function renderLeads(){
 
 async function loadRecipients(){
   const { data, error } = await db.from('notify_recipients').select('*').order('label');
-  if(error || !data){ $('notifyCard').style.display='none'; return; }
+  if(error || !data || !data.length){ $('notifyCard').style.display='none'; return; }
   $('notifyCard').style.display='block';
   const box = $('recips'); box.innerHTML='';
   for(const r of data){
