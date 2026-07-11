@@ -37,6 +37,35 @@
   tr:hover td{background:rgba(59,130,246,.05)}
   .tbl-scroll{overflow-x:auto}
   .yes{color:var(--ok);font-weight:600}.no{color:var(--muted)}
+  /* CRM: status colors */
+  select.status{font-weight:600}
+  .st-new{color:#fde047}.st-contacted{color:#fdba74}.st-show{color:#7dd3fc}.st-filed{color:#34d399}
+  .st-hot{color:#f87171}.st-duplicate{color:#d8b4fe}.st-management_review{color:#ed93b1}
+  .st-remarketing{color:#9aa3b2}.st-jail{color:#b45309}
+  .dupbadge{background:rgba(255,215,0,.15);color:var(--gold);border-radius:99px;padding:1px 9px;font-size:11.5px;font-weight:800;margin-left:6px}
+  .meter{display:inline-flex;gap:2px;vertical-align:middle}
+  .meter i{width:6px;height:13px;border-radius:2px;background:#262d3d;display:inline-block}
+  .meter i.h{background:var(--gold)} .meter i.a{background:#3a4258}
+  .tcount{font-size:11.5px;color:var(--muted);margin-left:6px;white-space:nowrap}
+  .oc-g{color:var(--ok);font-weight:600}.oc-a{color:var(--warn);font-weight:600}.oc-n{color:var(--muted)}
+  tr.detailrow>td{background:var(--panel2);padding:14px 16px;white-space:normal}
+  .touchline{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px;flex-wrap:wrap;align-items:baseline}
+  .touchline .tw{color:var(--muted);min-width:118px}.touchline .tb{font-weight:700;min-width:80px}
+  .badge-auto{background:rgba(148,163,184,.18);color:var(--muted);border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:700}
+  .chip{border:1.5px solid var(--line);background:var(--panel);color:var(--text);border-radius:99px;
+    padding:6px 14px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
+  .chip.selc{border-color:var(--primary-light);color:#93c5fd;background:rgba(59,130,246,.12)}
+  .chip.selg{border-color:var(--ok);color:var(--ok);background:rgba(52,211,153,.1)}
+  .chip.sela{border-color:var(--warn);color:var(--warn);background:rgba(251,191,36,.1)}
+  .chip.seln{border-color:#5b6372;color:#cbd5e1;background:rgba(148,163,184,.12)}
+  .logform{margin-top:10px;background:rgba(255,215,0,.04);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .logform .row{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;align-items:center}
+  .logform .lb{font-size:11.5px;color:var(--muted);min-width:50px}
+  .note-in{flex:1;min-width:180px;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:8px 11px;font-size:12.5px;font-family:inherit}
+  .statrow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .statbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 14px;min-width:104px}
+  .statbox .n{font-size:19px;font-weight:800;color:var(--gold)} .statbox .l{font-size:11px;color:var(--muted)}
+  .remnote{font-size:11.5px;color:var(--warn);margin-top:8px}
   select.status{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12.5px}
   .muted{color:var(--muted)} .small{font-size:12.5px}
   .recip{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap}
@@ -81,6 +110,14 @@
     <div class="flash" id="flash"></div>
     <div id="heartbeat" class="heartbeat" style="display:none">🫀 <strong>Maintenance Heartbeat</strong> — <span id="hbText"></span></div>
 
+    <div class="statrow" id="statrow" style="display:none">
+      <div class="statbox"><div class="n" id="stTotal">0</div><div class="l">Total entries</div></div>
+      <div class="statbox"><div class="n" id="stPeople">0</div><div class="l">Unique people</div></div>
+      <div class="statbox"><div class="n" id="stHot" style="color:#f87171">0</div><div class="l">🔥 HOT</div></div>
+      <div class="statbox"><div class="n" id="stRem" style="color:#9aa3b2">0</div><div class="l">Remarketing</div></div>
+      <div class="statbox"><div class="n" id="stWeek">0</div><div class="l">Touched this week</div></div>
+    </div>
+
     <div class="card">
       <h2>Entries <span class="muted small" id="count"></span></h2>
       <div class="toolbar">
@@ -93,7 +130,7 @@
       <div class="tbl-scroll">
         <table id="leadsTbl">
           <thead><tr>
-            <th>When</th><th>Name</th><th>Phone</th><th>Email</th><th>Instant Refund</th><th>Catch-Up</th><th>Ref</th><th>Status</th>
+            <th>When</th><th>Name</th><th>Phone</th><th>Status</th><th>Touches (8 → remarketing)</th><th>Last result</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -132,7 +169,7 @@ const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsIn
 const db = supabase.createClient(SB_URL, SB_ANON);
 
 const $ = id => document.getElementById(id);
-let LEADS = [];
+let LEADS = [], ME = { email:'', name:'' };
 function flash(msg, ok=true){ const f=$('flash'); f.textContent=msg; f.className='flash '+(ok?'ok':'err'); setTimeout(()=>f.className='flash',4500); }
 const esc = s => (s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pf = (L,k) => (L.fields && L.fields[k] != null) ? L.fields[k] : '';
@@ -151,45 +188,153 @@ function render(session){
   if(!session){ $('gate').style.display='block'; $('app').style.display='none'; $('outBtn').style.display='none'; $('who').textContent=''; return; }
   $('gate').style.display='none'; $('app').style.display='block'; $('outBtn').style.display='inline-block';
   $('who').textContent = session.user.email;
+  ME.email = session.user.email || '';
+  ME.name = (session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || (ME.email.split('@')[0]);
   loadLeads(); loadTeam(); loadHeartbeat();
 }
 
+const STATUSES=['new','contacted','show','filed','hot','duplicate','management_review','remarketing','jail'];
+const SLABEL={new:'New',contacted:'Contacted',show:'Show',filed:'Filed',hot:'HOT',duplicate:'Duplicate',management_review:'Mgmt Review',remarketing:'Remarketing',jail:'Jail'};
+const RES={no_reply:['No Reply','oc-n'],reply:['Reply','oc-a'],successful:['Successful','oc-g']};
+let TOUCHES=[], PEOPLE=[], OPENKEY=null, SEL={chan:null,res:null};
+
 async function loadLeads(){
-  const { data, error } = await db.from('leads').select('*').order('created_at',{ascending:false}).limit(1000);
+  const { data, error } = await db.from('leads').select('*').order('created_at',{ascending:false}).limit(3000);
   if(error){ flash('Cannot load entries: '+error.message+' (if you just signed in, an admin may need to approve your profile)', false); return; }
-  LEADS = data || []; renderLeads();
+  LEADS = data || [];
+  try{ const { data:t } = await db.from('touches').select('*').order('created_at',{ascending:false}).limit(8000); TOUCHES = t || []; }
+  catch(e){ TOUCHES = []; }
+  buildPeople(); renderLeads();
+}
+
+function pkey(L){ const d=(L.phone||'').replace(/\D/g,''); const e=(L.email||'').trim().toLowerCase(); return (d||e) ? d+'|'+e : 'row-'+L.id; }
+function buildPeople(){
+  const m=new Map();
+  for(const L of LEADS){ const k=pkey(L); if(!m.has(k)) m.set(k,{key:k,entries:[]}); m.get(k).entries.push(L); }
+  PEOPLE=[...m.values()].map(p=>{
+    p.entries.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    p.lead=p.entries[0];
+    const ids=new Set(p.entries.map(e=>e.id));
+    p.touches=TOUCHES.filter(t=>ids.has(t.lead_id));
+    p.human=p.touches.filter(t=>!t.is_auto);
+    p.auto=p.touches.filter(t=>t.is_auto);
+    p.engaged=p.touches.some(t=>t.result==='reply'||t.result==='successful');
+    p.last=p.touches[0]||null;
+    return p;
+  });
+  PEOPLE.sort((a,b)=>new Date(b.lead.created_at)-new Date(a.lead.created_at));
 }
 
 function filtered(){
   const q=$('search').value.trim().toLowerCase();
-  if(!q) return LEADS;
-  return LEADS.filter(L=>[L.name,L.phone,L.email,L.referred_by].join(' ').toLowerCase().includes(q));
+  if(!q) return PEOPLE;
+  return PEOPLE.filter(p=>[p.lead.name,p.lead.phone,p.lead.email,p.lead.referred_by].join(' ').toLowerCase().includes(q));
+}
+
+function meterHtml(p){
+  let cells='';
+  for(let i=0;i<8;i++) cells+=`<i class="${i<p.human.length?'h':''}"></i>`;
+  const autos=p.auto.length?` +${p.auto.length} 🤖`:'';
+  return `<span class="meter">${cells}</span><span class="tcount">${p.human.length} human${autos}</span>`;
 }
 
 function renderLeads(){
   const rows = filtered();
   const tb = $('leadsTbl').querySelector('tbody'); tb.innerHTML='';
-  $('count').textContent = '— '+rows.length+(rows.length===1?' entry':' entries');
+  $('count').textContent = '— '+rows.length+(rows.length===1?' person':' people');
   $('emptyNote').style.display = rows.length? 'none':'block';
-  for(const L of rows){
+  // stats
+  $('statrow').style.display='flex';
+  $('stTotal').textContent=LEADS.length; $('stPeople').textContent=PEOPLE.length;
+  $('stHot').textContent=PEOPLE.filter(p=>p.lead.status==='hot').length;
+  $('stRem').textContent=PEOPLE.filter(p=>p.lead.status==='remarketing').length;
+  const wk=Date.now()-7*864e5;
+  $('stWeek').textContent=PEOPLE.filter(p=>p.touches.some(t=>new Date(t.created_at)>wk)).length;
+
+  for(const p of rows){
+    const L=p.lead;
     const when = new Date(L.created_at).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+    const dup = p.entries.length>1 ? `<span class="dupbadge">${p.entries.length}</span>` : '';
+    const lastRes = p.last ? `<span class="${RES[p.last.result]?.[1]||'oc-n'}">${RES[p.last.result]?.[0]||''}</span>` : '<span class="oc-n">—</span>';
     const tr = document.createElement('tr');
+    tr.className='leadrow'; tr.style.cursor='pointer';
     tr.innerHTML = `<td class="small muted">${when}</td>
-      <td><strong>${esc(L.name)||'—'}</strong></td>
+      <td><strong>${esc(L.name)||'—'}</strong>${dup}</td>
       <td class="small">${esc(L.phone)||'—'}</td>
-      <td class="small">${esc(L.email)||'—'}</td>
-      <td>${yn(pf(L,'instantRefund'))}</td>
-      <td>${yn(pf(L,'catchUpTaxes'))}</td>
-      <td class="small">${esc(L.referred_by)||'—'}</td>
-      <td><select class="status" data-id="${L.id}">
-        ${['new','contacted','won','lost'].map(s=>`<option value="${s}" ${L.status===s?'selected':''}>${s}</option>`).join('')}
-      </select></td>`;
+      <td><select class="status st-${L.status||'new'}" data-key="${p.key}" onclick="event.stopPropagation()">
+        ${STATUSES.map(s=>`<option value="${s}" ${L.status===s?'selected':''}>${SLABEL[s]}</option>`).join('')}
+      </select></td>
+      <td>${meterHtml(p)}</td>
+      <td class="small">${lastRes}</td>`;
+    tr.onclick = ()=>{ OPENKEY = (OPENKEY===p.key? null : p.key); SEL={chan:null,res:null,note:''}; renderLeads(); };
     tb.appendChild(tr);
+    if(OPENKEY===p.key) tb.appendChild(detailRow(p));
   }
   tb.querySelectorAll('select.status').forEach(sel => sel.onchange = async e => {
-    const { error } = await db.from('leads').update({status:e.target.value}).eq('id', e.target.dataset.id);
-    error ? flash('Status update failed: '+error.message,false) : flash('Status updated.');
+    const p = PEOPLE.find(x=>x.key===e.target.dataset.key); if(!p) return;
+    const ids = p.entries.map(x=>x.id);
+    const { error } = await db.from('leads').update({status:e.target.value}).in('id', ids);
+    if(error){ flash('Status update failed: '+error.message,false); return; }
+    p.entries.forEach(x=>x.status=e.target.value); flash('Status updated.'); renderLeads();
   });
+}
+
+function detailRow(p){
+  const L=p.lead;
+  const tr=document.createElement('tr'); tr.className='detailrow';
+  const td=document.createElement('td'); td.colSpan=6;
+  const entries = p.entries.length>1
+    ? `<div class="small muted" style="margin-bottom:8px">Entries (${p.entries.length}): `+
+      p.entries.map(e=>new Date(e.created_at).toLocaleDateString('en-US',{month:'numeric',day:'numeric'})).join(' · ')+`</div>` : '';
+  const info = `<div class="small" style="margin-bottom:8px">${esc(L.email)||''} &nbsp; ${esc(L.phone)||''}
+    &nbsp; <span class="muted">Instant refund:</span> ${esc(pf(L,'instantRefund'))||'—'}
+    &nbsp; <span class="muted">Catch-up:</span> ${esc(pf(L,'catchUpTaxes'))||'—'}
+    &nbsp; <span class="muted">Ref:</span> ${esc(L.referred_by)||'—'}
+    &nbsp; <span class="muted">Source:</span> ${esc((L.fields&&L.fields.source)||L.source||'').replace('https://','')}</div>`;
+  const hist = p.touches.length ? p.touches.map(t=>{
+    const w=new Date(t.created_at).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+    const who = t.is_auto? '<span class="badge-auto">🤖 Auto</span>' : esc(t.by_name||t.touched_by||'');
+    const r=RES[t.result]||['',''];
+    return `<div class="touchline"><span class="tw">${w}</span><span class="tb">${who}</span>
+      <span style="min-width:44px;color:#7dd3fc">${esc(t.channel||'')}</span>
+      <span class="${r[1]}">${r[0]}</span><span class="muted">${esc(t.note||'')}</span></div>`;
+  }).join('') : '<div class="small muted">No touches yet.</div>';
+  const chip=(grp,val,label,cls)=>`<button class="chip ${SEL[grp]===val?cls:''}" onclick="event.stopPropagation();SEL.${grp}='${val}';renderLeads()">${label}</button>`;
+  td.innerHTML = entries + info + hist + `
+    <div class="logform" onclick="event.stopPropagation()">
+      <div class="row"><span class="lb">How?</span>
+        ${chip('chan','text','💬 Text','selc')}${chip('chan','email','📧 Email','selc')}${chip('chan','call','📞 Call','selc')}</div>
+      <div class="row"><span class="lb">Result?</span>
+        ${chip('res','no_reply','No Reply','seln')}${chip('res','reply','Reply','sela')}${chip('res','successful','✅ Successful','selg')}</div>
+      <div class="row"><input class="note-in" id="touchNote" value="${esc(SEL.note||'')}" oninput="SEL.note=this.value" placeholder="Note — what happened / what was said…">
+        <button class="btn btn-gold" onclick="event.stopPropagation();logTouch('${p.key}')">Log Touch</button></div>
+      <div class="small muted">Logged automatically as <strong>${esc(ME.name)}</strong> — no name or time to type.</div>
+    </div>
+    <div class="remnote">⏳ ${p.human.length} of 8 human touches used${p.engaged?' · engaged (reply received — count paused)':''}. At 8 with no engagement → auto-flag Remarketing. Never deleted.</div>`;
+  tr.appendChild(td);
+  return tr;
+}
+
+async function logTouch(key){
+  const p=PEOPLE.find(x=>x.key===key); if(!p) return;
+  if(!SEL.chan) return flash('Pick HOW you touched them (Text / Email / Call).', false);
+  if(!SEL.res)  return flash('Pick the RESULT (No Reply / Reply / Successful).', false);
+  const note=(SEL.note||($('touchNote')&&$('touchNote').value)||'').trim();
+  const { error } = await db.from('touches').insert({
+    lead_id: p.lead.id, touched_by: ME.email, by_name: ME.name,
+    is_auto: false, channel: SEL.chan, result: SEL.res, note
+  });
+  if(error){ flash('Touch failed: '+error.message,false); return; }
+  let msg='Touch logged.';
+  if(SEL.res==='no_reply' && !p.engaged && p.human.length+1>=8){
+    const ids=p.entries.map(x=>x.id);
+    await db.from('leads').update({status:'remarketing'}).in('id',ids);
+    p.entries.forEach(x=>x.status='remarketing');
+    msg='Touch logged — 8 human touches, no engagement → moved to REMARKETING.';
+  }
+  SEL={chan:null,res:null,note:''}; flash(msg);
+  await loadLeads();
+  OPENKEY=key; renderLeads();
 }
 
 async function loadTeam(){
@@ -246,12 +391,17 @@ async function loadHeartbeat(){
 
 // ---- downloads ----
 function rowsForExport(){
-  return filtered().map(L=>({
+  return filtered().map(p=>{const L=p.lead; return {
     Date: new Date(L.created_at).toLocaleString('en-US'),
-    Name: L.name||'', Phone: L.phone||'', Email: L.email||'',
+    Name: L.name||'', Entries: p.entries.length,
+    Phone: L.phone||'', Email: L.email||'',
+    Status: SLABEL[L.status]||L.status||'',
+    'Human Touches': p.human.length, 'Auto Touches': p.auto.length,
+    'Last Result': p.last ? (RES[p.last.result]?.[0]||'') : '',
+    'Last Touched By': p.last ? (p.last.is_auto?'Auto':(p.last.by_name||p.last.touched_by||'')) : '',
     'Instant Refund': pf(L,'instantRefund')||'', 'Catch-Up Taxes': pf(L,'catchUpTaxes')||'',
-    Ref: L.referred_by||'', Status: L.status||'', Source: L.source||''
-  }));
+    Ref: L.referred_by||'', Source: (L.fields&&L.fields.source)||L.source||''
+  };});
 }
 const stamp = () => new Date().toISOString().slice(0,10);
 function downloadCSV(){
