@@ -202,11 +202,21 @@ const SLABEL={new:'New',contacted:'Contacted',show:'Show',filed:'Filed',hot:'HOT
 const RES={no_reply:['No Reply','oc-n'],reply:['Reply','oc-a'],successful:['Successful','oc-g']};
 let TOUCHES=[], PEOPLE=[], OPENKEY=null, SEL={chan:null,res:null};
 
+async function fetchAll(table, orderCol){
+  const out=[];
+  for(let from=0;;from+=1000){
+    const { data, error } = await db.from(table).select('*').order(orderCol,{ascending:false}).range(from, from+999);
+    if(error) throw error;
+    out.push(...(data||[]));
+    if(!data || data.length<1000) break;
+    if(from>19000) break;
+  }
+  return out;
+}
 async function loadLeads(){
-  const { data, error } = await db.from('leads').select('*').order('created_at',{ascending:false}).limit(3000);
-  if(error){ flash('Cannot load entries: '+error.message+' (if you just signed in, an admin may need to approve your profile)', false); return; }
-  LEADS = data || [];
-  try{ const { data:t } = await db.from('touches').select('*').order('created_at',{ascending:false}).limit(8000); TOUCHES = t || []; }
+  try{ LEADS = await fetchAll('leads','created_at'); }
+  catch(e){ flash('Cannot load entries: '+e.message+' (if you just signed in, an admin may need to approve your profile)', false); return; }
+  try{ TOUCHES = await fetchAll('touches','created_at'); }
   catch(e){ TOUCHES = []; }
   buildPeople(); renderLeads();
 }
