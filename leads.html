@@ -69,6 +69,11 @@
   .statrow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
   .statbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 14px;min-width:104px}
   .statbox .n{font-size:19px;font-weight:800;color:var(--gold)} .statbox .l{font-size:11px;color:var(--muted)}
+  .kpibox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 16px;min-width:130px;flex:1}
+  .kpibox .n{font-size:22px;font-weight:800;color:var(--white)}
+  .kpibox .l{font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+  .kpibox .prev{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .up{color:var(--ok);font-weight:700}.down{color:var(--bad);font-weight:700}.flat{color:var(--muted)}
   .remnote{font-size:11.5px;color:var(--warn);margin-top:8px}
   select.status{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12.5px}
   .muted{color:var(--muted)} .small{font-size:12.5px}
@@ -120,6 +125,17 @@
       <div class="statbox"><div class="n" id="stHot" style="color:#f87171">0</div><div class="l">🔥 HOT</div></div>
       <div class="statbox"><div class="n" id="stRem" style="color:#9aa3b2">0</div><div class="l">Remarketing</div></div>
       <div class="statbox"><div class="n" id="stWeek">0</div><div class="l">Touched this week</div></div>
+    </div>
+
+    <div class="card" id="kpiCard" style="display:none">
+      <h2>📈 Lead Counts</h2>
+      <div class="statrow" style="margin-bottom:6px">
+        <div class="kpibox"><div class="l">Today</div><div class="n" id="kToday">0</div><div class="prev" id="kTodayP"></div></div>
+        <div class="kpibox"><div class="l">This Week</div><div class="n" id="kWeek">0</div><div class="prev" id="kWeekP"></div></div>
+        <div class="kpibox"><div class="l">This Month</div><div class="n" id="kMonth">0</div><div class="prev" id="kMonthP"></div></div>
+        <div class="kpibox"><div class="l">This Quarter</div><div class="n" id="kQtr">0</div><div class="prev" id="kQtrP"></div></div>
+      </div>
+      <div class="note">Counts every entry (not unique people) · Central Time · weeks run Sun–Sat · undated backfill rows excluded. This is the number Revenue will read for the lead KPI.</div>
     </div>
 
     <div class="card">
@@ -218,7 +234,43 @@ async function loadLeads(){
   catch(e){ flash('Cannot load entries: '+e.message+' (if you just signed in, an admin may need to approve your profile)', false); return; }
   try{ TOUCHES = await fetchAll('touches','created_at'); }
   catch(e){ TOUCHES = []; }
-  buildPeople(); renderLeads();
+  buildPeople(); renderLeads(); renderKpis();
+}
+
+const CTFMT = new Intl.DateTimeFormat('en-CA',{ timeZone:'America/Chicago' });
+function renderKpis(){
+  const dated = LEADS.filter(L => !(((L.fields&&L.fields.source)||L.source||'').includes('(no date)')));
+  const days = dated.map(L => CTFMT.format(new Date(L.created_at)));           // 'YYYY-MM-DD' in CT
+  const epoch = s => Math.floor(Date.parse(s+'T00:00:00Z')/864e5);
+  const todayS = CTFMT.format(new Date()), todayE = epoch(todayS);
+  const dow = new Date(todayS+'T00:00:00Z').getUTCDay();                       // 0=Sun
+  const weekStart = todayE - dow, m = todayS.slice(0,7);
+  const [y, mo] = [ +todayS.slice(0,4), +todayS.slice(5,7) ];
+  const q = Math.floor((mo-1)/3), qKey = y+'-Q'+q, lqKey = (q===0? (y-1)+'-Q3' : y+'-Q'+(q-1));
+  const lastM = mo===1 ? (y-1)+'-12' : y+'-'+String(mo-1).padStart(2,'0');
+  const c = { today:0, yest:0, week:0, lweek:0, month:0, lmonth:0, qtr:0, lqtr:0 };
+  for(const s of days){
+    const e = epoch(s), mm = s.slice(0,7);
+    const yy = +s.slice(0,4), qk = yy+'-Q'+Math.floor((+s.slice(5,7)-1)/3);
+    if(s===todayS) c.today++;
+    if(e===todayE-1) c.yest++;
+    if(e>=weekStart && e<=todayE) c.week++;
+    if(e>=weekStart-7 && e<weekStart) c.lweek++;
+    if(mm===m) c.month++;
+    if(mm===lastM) c.lmonth++;
+    if(qk===qKey) c.qtr++;
+    if(qk===lqKey) c.lqtr++;
+  }
+  const cmp = (now, prev, label) => {
+    const cls = now>prev?'up':(now<prev?'down':'flat');
+    const arrow = now>prev?'▲':(now<prev?'▼':'—');
+    return `${label}: ${prev} <span class="${cls}">${arrow}</span>`;
+  };
+  $('kpiCard').style.display='block';
+  $('kToday').textContent=c.today;  $('kTodayP').innerHTML=cmp(c.today,c.yest,'yesterday');
+  $('kWeek').textContent=c.week;    $('kWeekP').innerHTML=cmp(c.week,c.lweek,'last week');
+  $('kMonth').textContent=c.month;  $('kMonthP').innerHTML=cmp(c.month,c.lmonth,'last month');
+  $('kQtr').textContent=c.qtr;      $('kQtrP').innerHTML=cmp(c.qtr,c.lqtr,'last quarter');
 }
 
 function pkey(L){ const d=(L.phone||'').replace(/\D/g,''); const e=(L.email||'').trim().toLowerCase(); return (d||e) ? d+'|'+e : 'row-'+L.id; }
