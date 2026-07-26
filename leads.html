@@ -83,6 +83,9 @@
   .tlbl{font-size:15px;flex:0 0 auto;opacity:.85}
   .heartbeat{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#fca5a5;border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13.5px;font-weight:600;cursor:pointer;animation:hb 1.6s ease-in-out infinite}
   .updbar{background:rgba(255,215,0,.14);border:1px solid var(--gold);color:var(--gold);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:13.5px;font-weight:700;cursor:pointer;animation:hb 1.6s ease-in-out infinite;text-align:center}
+  .leadflash{background:linear-gradient(135deg,rgba(255,215,0,.25),rgba(245,158,11,.15));border:2px solid var(--gold);color:var(--white);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:15px;font-weight:800;text-align:center;animation:hb 1.2s ease-in-out infinite}
+  .sndbtn{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit}
+  .sndbtn.on{border-color:var(--gold);color:var(--gold)}
   @keyframes hb{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,.45)}50%{box-shadow:0 0 0 9px rgba(248,113,113,0)}}
   .switch{position:relative;width:46px;height:24px;flex:0 0 auto}
   .switch input{opacity:0;width:0;height:0}
@@ -104,6 +107,7 @@
     <div class="brand">TAX VEGAS <span>GIVEAWAY</span> — Back End</div>
     <div class="toolbar" style="margin:0">
       <span class="who" id="who"></span>
+      <button class="sndbtn" id="sndBtn" style="display:none" title="Play a sound when a new lead comes in">🔇 Sound OFF</button>
       <button class="btn btn-ghost" id="outBtn" style="display:none">Sign out</button>
     </div>
   </header>
@@ -119,6 +123,7 @@
   <div id="app" style="display:none">
     <div class="flash" id="flash"></div>
     <div id="updbar" class="updbar" style="display:none" onclick="location.reload()">🔄 <strong>This board was updated</strong> — click here to refresh so you're not working off the old version.</div>
+    <div id="leadflash" class="leadflash" style="display:none"></div>
     <div id="heartbeat" class="heartbeat" style="display:none">🫀 <strong>Maintenance Heartbeat</strong> — <span id="hbText"></span></div>
 
     <div class="statrow" id="statrow" style="display:none">
@@ -194,7 +199,59 @@ const $ = id => document.getElementById(id);
 let LEADS = [], ME = { email:'', name:'' };
 
 // ---- refresh-on-update: this page's build vs the deployed version.json ----
-const BUILD = '2026-07-22-1';
+const BUILD = '2026-07-25-2';
+
+// ---- #12 Lead SOUND notification (interim: synth Vegas jackpot; drops to sounds/new-lead.mp3 when the song clip lands) ----
+let SOUND = localStorage.getItem('tvg_sound') === 'on';
+let AC = null, TOPID = null;
+function ensureAC(){ try{ AC = AC || new (window.AudioContext||window.webkitAudioContext)(); AC.resume(); }catch(e){} }
+function updateSndBtn(){ const b=$('sndBtn'); if(!b) return; b.className='sndbtn'+(SOUND?' on':''); b.textContent = SOUND ? '🔊 Sound ON' : '🔇 Sound OFF'; }
+function synthJackpot(){
+  if(!AC) return;
+  const t0 = AC.currentTime + 0.02;
+  const ding = (freq, at, dur, vol, type) => {
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'triangle'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t0+at); g.gain.linearRampToValueAtTime(vol, t0+at+0.015);
+    g.gain.exponentialRampToValueAtTime(0.001, t0+at+dur);
+    o.connect(g); g.connect(AC.destination); o.start(t0+at); o.stop(t0+at+dur+0.05);
+  };
+  ding(1046.5, 0.00, 0.22, 0.35);           // C6  ding
+  ding(1318.5, 0.14, 0.22, 0.35);           // E6  ding
+  ding(1568.0, 0.28, 0.26, 0.38);           // G6  ding!
+  [523.25, 659.25, 783.99, 1046.5].forEach(f => ding(f, 0.46, 0.75, 0.16, 'sine')); // win chord
+  ding(2093.0, 0.56, 0.10, 0.20, 'square'); // coin
+  ding(1760.0, 0.68, 0.10, 0.18, 'square'); // coin
+  ding(2349.3, 0.80, 0.14, 0.20, 'square'); // coin!
+}
+function playNewLeadSound(){
+  if(!SOUND) return;
+  ensureAC();
+  try{
+    const a = new Audio('sounds/new-lead.mp3');
+    a.play().catch(()=>synthJackpot());
+  }catch(e){ synthJackpot(); }
+}
+function flashNewLead(name){
+  const f=$('leadflash');
+  f.textContent = '🎰 NEW LEAD — ' + (name || 'Unknown') + '!';
+  f.style.display='block';
+  setTimeout(()=>{ f.style.display='none'; }, 12000);
+}
+async function watchNewLeads(){
+  if(!ME.email) return;
+  try{
+    const { data } = await db.from('leads').select('id,name,created_at').order('created_at',{ascending:false}).limit(1);
+    const top = data && data[0];
+    if(!top) return;
+    if(TOPID && top.id !== TOPID){
+      playNewLeadSound(); flashNewLead(top.name);
+      loadLeads();
+    }
+    TOPID = top.id;
+  }catch(e){}
+}
+setInterval(watchNewLeads, 45000);
 async function checkVersion(){
   try{
     const r = await fetch('version.json?cb='+Date.now(), { cache:'no-store' });
@@ -213,6 +270,12 @@ function yn(v){ if(v==null||v==='')return '<span class="no">—</span>'; const s
 
 $('googleBtn').onclick = () => db.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: location.origin + location.pathname }});
 $('outBtn').onclick = async () => { await db.auth.signOut(); location.reload(); };
+$('sndBtn').onclick = () => {
+  SOUND = !SOUND;
+  localStorage.setItem('tvg_sound', SOUND ? 'on' : 'off');
+  updateSndBtn();
+  if(SOUND){ ensureAC(); synthJackpot(); flash('Sound ON — that\'s the new-lead sound. 🎰'); }
+};
 $('refreshBtn').onclick = () => { loadLeads(); loadTeam(); loadHeartbeat(); };
 $('search').oninput = renderLeads;
 $('csvBtn').onclick = downloadCSV; $('xlsxBtn').onclick = downloadXLSX; $('pdfBtn').onclick = downloadPDF;
@@ -224,6 +287,7 @@ function render(session){
   if(!session){ $('gate').style.display='block'; $('app').style.display='none'; $('outBtn').style.display='none'; $('who').textContent=''; return; }
   $('gate').style.display='none'; $('app').style.display='block'; $('outBtn').style.display='inline-block';
   $('who').textContent = session.user.email;
+  $('sndBtn').style.display='inline-block'; updateSndBtn();
   ME.email = session.user.email || '';
   ME.name = (session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || (ME.email.split('@')[0]);
   loadLeads(); loadTeam(); loadHeartbeat();
@@ -251,6 +315,7 @@ async function loadLeads(){
   try{ TOUCHES = await fetchAll('touches','created_at'); }
   catch(e){ TOUCHES = []; }
   buildPeople(); renderLeads(); renderKpis();
+  if (TOPID === null && LEADS.length) TOPID = LEADS[0].id;   // arm the new-lead watcher
 }
 
 const CTFMT = new Intl.DateTimeFormat('en-CA',{ timeZone:'America/Chicago' });
