@@ -199,7 +199,7 @@ const $ = id => document.getElementById(id);
 let LEADS = [], ME = { email:'', name:'' };
 
 // ---- refresh-on-update: this page's build vs the deployed version.json ----
-const BUILD = '2026-07-25-2';
+const BUILD = '2026-07-28-1';
 
 // ---- #12 Lead SOUND notification (interim: synth Vegas jackpot; drops to sounds/new-lead.mp3 when the song clip lands) ----
 let SOUND = localStorage.getItem('tvg_sound') === 'on';
@@ -274,7 +274,7 @@ $('sndBtn').onclick = () => {
   SOUND = !SOUND;
   localStorage.setItem('tvg_sound', SOUND ? 'on' : 'off');
   updateSndBtn();
-  if(SOUND){ ensureAC(); synthJackpot(); flash('Sound ON — that\'s the new-lead sound. 🎰'); }
+  if(SOUND){ playNewLeadSound(); flash('Sound ON — that\'s the new-lead sound. 🎰'); }
 };
 $('refreshBtn').onclick = () => { loadLeads(); loadTeam(); loadHeartbeat(); };
 $('search').oninput = renderLeads;
