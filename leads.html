@@ -199,11 +199,12 @@ const $ = id => document.getElementById(id);
 let LEADS = [], ME = { email:'', name:'' };
 
 // ---- refresh-on-update: this page's build vs the deployed version.json ----
-const BUILD = '2026-07-28-1';
+const BUILD = '2026-07-28-2';
 
 // ---- #12 Lead SOUND notification (interim: synth Vegas jackpot; drops to sounds/new-lead.mp3 when the song clip lands) ----
-let SOUND = localStorage.getItem('tvg_sound') === 'on';
+let SOUND = localStorage.getItem('tvg_sound') !== 'off';   // ALWAYS ON by default (toggle only to opt out)
 let AC = null, TOPID = null;
+document.addEventListener('click', function(){ if(SOUND) ensureAC(); }, { once:true });   // any first click unlocks audio
 function ensureAC(){ try{ AC = AC || new (window.AudioContext||window.webkitAudioContext)(); AC.resume(); }catch(e){} }
 function updateSndBtn(){ const b=$('sndBtn'); if(!b) return; b.className='sndbtn'+(SOUND?' on':''); b.textContent = SOUND ? '🔊 Sound ON' : '🔇 Sound OFF'; }
 function synthJackpot(){
