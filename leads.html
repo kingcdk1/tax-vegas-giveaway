@@ -112,6 +112,18 @@
     </div>
   </header>
 
+  <!-- #14 SUGGESTION BOX (floating, always in your face once signed in) -->
+  <button id="sugBtn" style="display:none;position:fixed;right:16px;bottom:16px;z-index:80;border:1px solid rgba(240,200,90,.5);background:#151a24;color:#f0c85a;border-radius:999px;padding:12px 16px;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.45)">💡 Suggestion</button>
+  <div id="sugPanel" style="display:none;position:fixed;right:16px;bottom:70px;z-index:80;width:min(340px,calc(100vw - 32px));background:#151a24;border:1px solid rgba(240,200,90,.4);border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.55)">
+    <div style="font-weight:700;color:#f0c85a;margin-bottom:8px">💡 Report an issue / idea</div>
+    <div class="small muted" style="margin-bottom:8px">Tell the developers what's wrong or what to improve. Your name &amp; time attach automatically.</div>
+    <textarea id="sugText" rows="4" style="width:100%;background:#0e121a;color:#e8ecf3;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px;font:inherit" placeholder="What's wrong with the site / your idea…"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end">
+      <button class="btn btn-ghost" id="sugCancel">Cancel</button>
+      <button class="btn btn-gold" id="sugSend">Send</button>
+    </div>
+  </div>
+
   <!-- LOGIN GATE -->
   <div id="gate" class="card">
     <h2>Team Sign-In</h2>
@@ -150,9 +162,9 @@
       <div class="toolbar">
         <input class="search" id="search" placeholder="Search name, phone, email, ref…">
         <button class="btn btn-ghost" id="refreshBtn">Refresh</button>
-        <button class="btn btn-gold" id="csvBtn">CSV</button>
-        <button class="btn btn-gold" id="xlsxBtn">Excel</button>
-        <button class="btn btn-gold" id="pdfBtn">PDF</button>
+        <button class="btn btn-gold" id="csvBtn" style="display:none">CSV</button>
+        <button class="btn btn-gold" id="xlsxBtn" style="display:none">Excel</button>
+        <button class="btn btn-gold" id="pdfBtn" style="display:none">PDF</button>
       </div>
       <div class="tbl-scroll">
         <table id="leadsTbl">
@@ -176,14 +188,22 @@
       <div class="note"><strong>📧 = gets the lead alert emails.</strong> &nbsp; <strong>👁 = can log in and see/work the leads.</strong> Two separate switches — someone can see without emails, or get emails without seeing. Add everyone on the team here; they show up the moment you add their Gmail (they don't have to log in first). Flip whatever you want. Admins always have full access.</div>
     </div>
 
+    <div class="card" id="sugCard" style="display:none">
+      <h2>💡 Suggestions &amp; Issues</h2>
+      <div id="sugList"></div>
+      <div class="note">Anyone on the team: hit the floating <strong>💡 Suggestion</strong> button (bottom right) to report an error, issue, or idea — your name and the time are logged automatically. A developer/admin clicks <strong>Acknowledge</strong> when they've seen it, then <strong>Fixed</strong> when it's done. Fixed items stay visible for 7 days, then disappear (nothing is ever deleted).</div>
+    </div>
+
     <div class="card">
       <h2>Instructions &amp; Training</h2>
       <div class="note">
         1. Every giveaway entry lands here automatically AND emails everyone toggled ON above. GoHighLevel still receives every entry on the page — untouched.<br>
         2. Work an entry → set its Status (New → Contacted → Closed). Everyone sees the same board.<br>
         3. Change who gets the emails: admins use "Where Leads Go" above — no developer needed.<br>
-        4. Download entries anytime with CSV / Excel / PDF (top right).<br>
-        5. Sign-in is your Gmail. If you can sign in but see nothing, an admin needs to approve your profile.
+        4. Downloads (CSV / Excel / PDF, top right) are <strong>admin-only</strong> — the buttons only appear for admins.<br>
+        5. Sign-in is your Gmail. If you can sign in but see nothing, an admin needs to approve your profile.<br>
+        6. Something broken or slow? Use the floating 💡 Suggestion button — it goes on the Suggestions &amp; Issues board and emails the owner.<br>
+        7. For speed, the table shows the newest 300 people — use the search box for anyone older. Exports always include everyone.
       </div>
     </div>
   </div>
@@ -199,7 +219,7 @@ const $ = id => document.getElementById(id);
 let LEADS = [], ME = { email:'', name:'' };
 
 // ---- refresh-on-update: this page's build vs the deployed version.json ----
-const BUILD = '2026-07-28-2';
+const BUILD = '2026-07-30-1';
 
 // ---- #12 Lead SOUND notification (interim: synth Vegas jackpot; drops to sounds/new-lead.mp3 when the song clip lands) ----
 let SOUND = localStorage.getItem('tvg_sound') !== 'off';   // ALWAYS ON by default (toggle only to opt out)
@@ -279,25 +299,73 @@ $('sndBtn').onclick = () => {
 };
 $('refreshBtn').onclick = () => { loadLeads(); loadTeam(); loadHeartbeat(); };
 $('search').oninput = renderLeads;
-$('csvBtn').onclick = downloadCSV; $('xlsxBtn').onclick = downloadXLSX; $('pdfBtn').onclick = downloadPDF;
+const adminOnly = fn => () => IS_ADMIN ? fn() : flash('Exports are admin-only.', false);
+$('csvBtn').onclick = adminOnly(downloadCSV); $('xlsxBtn').onclick = adminOnly(downloadXLSX); $('pdfBtn').onclick = adminOnly(downloadPDF);
+
+// ---- #14 Suggestion box ----
+$('sugBtn').onclick = () => { const p=$('sugPanel'); p.style.display = p.style.display==='none' ? 'block' : 'none'; if(p.style.display==='block') $('sugText').focus(); };
+$('sugCancel').onclick = () => $('sugPanel').style.display='none';
+// absolute URL so it also works from giveaway.pcstaxservice.com/leads.html (Pages copy)
+const SUGGEST_API = 'https://giveaway-leads.vercel.app/api/suggest';
+$('sugSend').onclick = async () => {
+  const text = $('sugText').value.trim();
+  if(!text) return flash("Type what's wrong or your idea first.", false);
+  $('sugSend').disabled = true; $('sugSend').textContent = 'Sending…';
+  const rec = { site:'tax-vegas-giveaway', text, by_name:ME.name, by_email:ME.email, status:'new' };
+  let stored=false;
+  try{ const { error } = await db.from('suggestions').insert(rec); stored=!error; }catch(e){}
+  try{ fetch(SUGGEST_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(rec)}); }catch(e){}
+  $('sugText').value=''; $('sugPanel').style.display='none';
+  flash(stored ? '💡 Sent to the developers — thank you!' : '💡 Emailed to the developers — thank you!');
+  if(stored) loadSuggestions();
+  $('sugSend').disabled = false; $('sugSend').textContent = 'Send';
+};
+
+// ---- Admin-only Issues view: New → Acknowledge → Mark Fixed (fixed clears after 7 days) ----
+async function loadSuggestions(){
+  const card=$('sugCard');
+  if(!IS_ADMIN){ card.style.display='none'; return; }
+  try{
+    const { data, error } = await db.from('suggestions').select('*').order('created_at',{ascending:false});
+    if(error) throw error;
+    const cut = Date.now()-7*864e5;
+    const rows=(data||[]).filter(s=>!(s.status==='fixed'&&s.fixed_at&&Date.parse(s.fixed_at)<cut));
+    card.style.display='block';
+    const box=$('sugList');
+    if(!rows.length){ box.innerHTML='<div class="small muted">No open issues. 🎉</div>'; return; }
+    box.innerHTML = rows.map(s=>{
+      const w=new Date(s.created_at).toLocaleString('en-US',{timeZone:'America/Chicago',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
+      const badge = s.status==='fixed' ? `<span class="oc-g">✓ Fixed by ${esc(s.fixed_by||'')} · clears in 7d</span>`
+        : s.status==='ack' ? `<span class="oc-a">👀 Acknowledged by ${esc(s.ack_by||'')}</span>`
+        : `<span class="oc-n">NEW</span>`;
+      const act = s.status==='new' ? `<button class="btn btn-ghost" data-ack="${s.id}">Acknowledge</button>`
+        : s.status==='ack' ? `<button class="btn btn-gold" data-fix="${s.id}">Mark Fixed</button>` : '';
+      return `<div class="touchline"><span class="tw">${w}</span><span class="tb">${esc(s.by_name||s.by_email||'—')}</span><span style="flex:1">${esc(s.text)}</span>${badge}${act}</div>`;
+    }).join('');
+    box.querySelectorAll('[data-ack]').forEach(b=>b.onclick=async()=>{ const {error}=await db.from('suggestions').update({status:'ack',ack_by:ME.name||ME.email,ack_at:new Date().toISOString()}).eq('id',b.dataset.ack); error?flash('Failed: '+error.message,false):loadSuggestions(); });
+    box.querySelectorAll('[data-fix]').forEach(b=>b.onclick=async()=>{ const {error}=await db.from('suggestions').update({status:'fixed',fixed_by:ME.name||ME.email,fixed_at:new Date().toISOString()}).eq('id',b.dataset.fix); error?flash('Failed: '+error.message,false):loadSuggestions(); });
+  }catch(e){ card.style.display='none'; }   // table not created yet → stay hidden
+}
 
 db.auth.onAuthStateChange((_e, session) => render(session));
 db.auth.getSession().then(({data}) => render(data.session));
 
 function render(session){
-  if(!session){ $('gate').style.display='block'; $('app').style.display='none'; $('outBtn').style.display='none'; $('who').textContent=''; return; }
+  if(!session){ $('gate').style.display='block'; $('app').style.display='none'; $('outBtn').style.display='none'; $('who').textContent=''; $('sugBtn').style.display='none'; $('sugPanel').style.display='none'; return; }
   $('gate').style.display='none'; $('app').style.display='block'; $('outBtn').style.display='inline-block';
   $('who').textContent = session.user.email;
   $('sndBtn').style.display='inline-block'; updateSndBtn();
+  $('sugBtn').style.display='block'; STOKEN = session.access_token || '';
   ME.email = session.user.email || '';
   ME.name = (session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || (ME.email.split('@')[0]);
-  loadLeads(); loadTeam(); loadHeartbeat();
+  loadLeads(); loadTeam(); loadHeartbeat().then(loadSuggestions);
 }
 
 const STATUSES=['new','contacted','show','filed','hot','duplicate','management_review','remarketing','jail'];
 const SLABEL={new:'New',contacted:'Contacted',show:'Show',filed:'Filed',hot:'HOT',duplicate:'Duplicate',management_review:'Mgmt Review',remarketing:'Remarketing',jail:'Jail'};
 const RES={no_reply:['No Reply','oc-n'],reply:['Reply','oc-a'],successful:['Successful','oc-g']};
 let TOUCHES=[], PEOPLE=[], OPENKEY=null, SEL={chan:null,res:null};
+let IS_ADMIN=false, STOKEN='';   // #13 export gate + #14 suggestion auth
 
 async function fetchAll(table, orderCol){
   const out=[];
@@ -400,7 +468,9 @@ function renderLeads(){
   const wk=Date.now()-7*864e5;
   $('stWeek').textContent=PEOPLE.filter(p=>p.touches.some(t=>new Date(t.created_at)>wk)).length;
 
-  for(const p of rows){
+  // SPEED: render newest 300 only — full list stays in memory for search/exports/KPIs
+  const CAP = 300, shown = rows.slice(0, CAP);
+  for(const p of shown){
     const L=p.lead;
     const when = new Date(L.created_at).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
     const dup = p.entries.length>1 ? `<span class="dupbadge">${p.entries.length}</span>` : '';
@@ -420,6 +490,11 @@ function renderLeads(){
     tr.onclick = ()=>{ OPENKEY = (OPENKEY===p.key? null : p.key); SEL={chan:null,res:null,note:''}; renderLeads(); };
     tb.appendChild(tr);
     if(OPENKEY===p.key) tb.appendChild(detailRow(p));
+  }
+  if(rows.length > CAP){
+    const more = document.createElement('tr');
+    more.innerHTML = `<td colspan="7" class="small muted" style="text-align:center;padding:12px">Showing the newest ${CAP} of ${rows.length} people — type in the search box to find anyone else. Exports always include everyone.</td>`;
+    tb.appendChild(more);
   }
   tb.querySelectorAll('select.status').forEach(sel => sel.onchange = async e => {
     const p = PEOPLE.find(x=>x.key===e.target.dataset.key); if(!p) return;
@@ -476,15 +551,19 @@ async function logTouch(key){
     is_auto: false, channel: SEL.chan, result: SEL.res, note
   });
   if(error){ flash('Touch failed: '+error.message,false); return; }
+  // SPEED: update the screen locally — no full refetch of every lead per click
+  const t = { lead_id:p.lead.id, touched_by:ME.email, by_name:ME.name, is_auto:false,
+              channel:SEL.chan, result:SEL.res, note, created_at:new Date().toISOString() };
+  TOUCHES.unshift(t); p.touches.unshift(t); p.human.unshift(t); p.last=t;
+  if(t.result==='reply'||t.result==='successful') p.engaged=true;
   let msg='Touch logged.';
-  if(SEL.res==='no_reply' && !p.engaged && p.human.length+1>=8){
+  if(t.result==='no_reply' && !p.engaged && p.human.length>=8){
     const ids=p.entries.map(x=>x.id);
     await db.from('leads').update({status:'remarketing'}).in('id',ids);
     p.entries.forEach(x=>x.status='remarketing');
     msg='Touch logged — 8 human touches, no engagement → moved to REMARKETING.';
   }
   SEL={chan:null,res:null,note:''}; flash(msg);
-  await loadLeads();
   OPENKEY=key; renderLeads();
 }
 
@@ -528,7 +607,10 @@ async function loadHeartbeat(){
   try {
     const { data:{ user } } = await db.auth.getUser();
     const { data:me } = await db.from('profiles').select('role').eq('id', user.id).single();
-    if(!me || me.role !== 'admin'){ hb.style.display='none'; return; }   // admins only
+    IS_ADMIN = !!(me && me.role === 'admin');
+    // #13 — exports are admin-only, buttons stay hidden for everyone else
+    ['csvBtn','xlsxBtn','pdfBtn'].forEach(id => $(id).style.display = IS_ADMIN ? 'inline-block' : 'none');
+    if(!IS_ADMIN){ hb.style.display='none'; return; }   // heartbeat = admins only
     const { data:profs } = await db.from('profiles').select('email');
     const { data:team } = await db.from('notify_recipients').select('email');
     const roster = new Set((team||[]).map(t => (t.email||'').toLowerCase().trim()));
