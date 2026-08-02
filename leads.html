@@ -47,6 +47,8 @@
   .src-fb{background:rgba(59,130,246,.16);color:#93c5fd}
   .src-page{background:rgba(52,211,153,.14);color:#5eead4}
   .src-both{background:rgba(216,180,254,.15);color:#d8b4fe}
+  .src-cal{background:rgba(251,191,36,.15);color:#fcd34d}
+  .src-ref{background:rgba(240,200,90,.16);color:#f0c85a;margin-left:4px}
   .meter{display:inline-flex;gap:2px;vertical-align:middle}
   .meter i{width:6px;height:13px;border-radius:2px;background:#262d3d;display:inline-block}
   .meter i.h{background:var(--gold)} .meter i.a{background:#3a4258}
@@ -203,7 +205,8 @@
         4. Downloads (CSV / Excel / PDF, top right) are <strong>admin-only</strong> — the buttons only appear for admins.<br>
         5. Sign-in is your Gmail. If you can sign in but see nothing, an admin needs to approve your profile.<br>
         6. Something broken or slow? Use the floating 💡 Suggestion button — it goes on the Suggestions &amp; Issues board and emails the owner.<br>
-        7. For speed, the table shows the newest 300 people — use the search box for anyone older. Exports always include everyone.
+        7. For speed, the table shows the newest 300 people — use the search box for anyone older. Exports always include everyone.<br>
+        8. <strong>Source badges</strong> — <span class="srcb src-fb">FB</span> Facebook ad · <span class="srcb src-page">Page</span> the website/landing page · <span class="srcb src-both">Both</span> came in through both · <span class="srcb src-cal">📅 Booking</span> a calendar booking · <span class="srcb src-ref">👥 Ref · Jimmarr F.</span> someone referred them (📱 QR = they scanned a QR code). Hover the referral badge for the full name; exports show it in full.
       </div>
     </div>
   </div>
@@ -219,7 +222,7 @@ const $ = id => document.getElementById(id);
 let LEADS = [], ME = { email:'', name:'' };
 
 // ---- refresh-on-update: this page's build vs the deployed version.json ----
-const BUILD = '2026-07-30-1';
+const BUILD = '2026-07-30-2';
 
 // ---- #12 Lead SOUND notification (interim: synth Vegas jackpot; drops to sounds/new-lead.mp3 when the song clip lands) ----
 let SOUND = localStorage.getItem('tvg_sound') !== 'off';   // ALWAYS ON by default (toggle only to opt out)
@@ -422,6 +425,20 @@ function renderKpis(){
   $('kQtr').textContent=c.qtr;      $('kQtrP').innerHTML=cmp(c.qtr,c.lqtr,'last quarter');
 }
 
+// Where did this entry come from? Facebook ad · calendar booking · the site/landing page.
+function channelOf(e){
+  const s = (((e.fields&&e.fields.source)||e.source||'')+'').toLowerCase();
+  if(/calendar|calendly|booking|appointment/.test(s)) return 'cal';
+  if(/facebook|instagram|\bmeta\b|\bfb\b/.test(s))    return 'fb';
+  return 'page';
+}
+// Referrer shown as First name + last initial (e.g. "Jimmarr F.") — full name on hover.
+function shortName(s){
+  const p=(s||'').trim().split(/\s+/).filter(Boolean);
+  if(!p.length) return '';
+  if(p.length===1) return p[0];
+  return p[0]+' '+p[p.length-1][0].toUpperCase()+'.';
+}
 function pkey(L){ const d=(L.phone||'').replace(/\D/g,''); const e=(L.email||'').trim().toLowerCase(); return (d||e) ? d+'|'+e : 'row-'+L.id; }
 function buildPeople(){
   const m=new Map();
@@ -435,8 +452,11 @@ function buildPeople(){
     p.auto=p.touches.filter(t=>t.is_auto);
     p.engaged=p.touches.some(t=>t.result==='reply'||t.result==='successful');
     p.last=p.touches[0]||null;
-    const kinds=new Set(p.entries.map(e=>/facebook/i.test(((e.fields&&e.fields.source)||e.source||''))?'fb':'page'));
-    p.src = kinds.size>1 ? 'both' : (kinds.has('fb') ? 'fb' : 'page');
+    const kinds=new Set(p.entries.map(channelOf));
+    p.src = kinds.size>1 ? 'both' : ([...kinds][0] || 'page');
+    // referral / QR attribution — rides with the lead as referred_by (?ref= capture)
+    p.ref = p.entries.map(e=>(e.referred_by||'').trim()).find(Boolean) || '';
+    p.viaQR = p.entries.some(e=>/qr/i.test(((e.fields&&(e.fields.via||e.fields.qr))||'')+''));
     return p;
   });
   PEOPLE.sort((a,b)=>new Date(b.lead.created_at)-new Date(a.lead.created_at));
@@ -477,7 +497,9 @@ function renderLeads(){
     const lastRes = p.last ? `<span class="${RES[p.last.result]?.[1]||'oc-n'}">${RES[p.last.result]?.[0]||''}</span>` : '<span class="oc-n">—</span>';
     const tr = document.createElement('tr');
     tr.className='leadrow'; tr.style.cursor='pointer';
-    const srcb = {fb:'<span class="srcb src-fb">FB</span>', page:'<span class="srcb src-page">Page</span>', both:'<span class="srcb src-both">Both</span>'}[p.src];
+    const srcb = ({fb:'<span class="srcb src-fb">FB</span>', page:'<span class="srcb src-page">Page</span>',
+      both:'<span class="srcb src-both">Both</span>', cal:'<span class="srcb src-cal">📅 Booking</span>'}[p.src] || '')
+      + (p.ref ? `<span class="srcb src-ref" title="Referred by ${esc(p.ref)}">${p.viaQR?'📱 QR':'👥 Ref'} · ${esc(shortName(p.ref))}</span>` : '');
     tr.innerHTML = `<td class="small muted">${when}</td>
       <td><strong>${esc(L.name)||'—'}</strong>${dup}</td>
       <td>${srcb}</td>
@@ -515,7 +537,7 @@ function detailRow(p){
   const info = `<div class="small" style="margin-bottom:8px">${esc(L.email)||''} &nbsp; ${esc(L.phone)||''}
     &nbsp; <span class="muted">Instant refund:</span> ${esc(pf(L,'instantRefund'))||'—'}
     &nbsp; <span class="muted">Catch-up:</span> ${esc(pf(L,'catchUpTaxes'))||'—'}
-    &nbsp; <span class="muted">Ref:</span> ${esc(L.referred_by)||'—'}
+    &nbsp; <span class="muted">Referred by:</span> ${esc(p.ref)||'—'}${p.ref&&p.viaQR?' (QR code)':(p.ref?' (referral link)':'')}
     &nbsp; <span class="muted">Source:</span> ${esc((L.fields&&L.fields.source)||L.source||'').replace('https://','')}</div>`;
   const hist = p.touches.length ? p.touches.map(t=>{
     const w=new Date(t.created_at).toLocaleString('en-US',{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});
@@ -628,7 +650,8 @@ function rowsForExport(){
     Date: new Date(L.created_at).toLocaleString('en-US'),
     Name: L.name||'', Entries: p.entries.length,
     Phone: L.phone||'', Email: L.email||'',
-    Source: {fb:'Facebook',page:'Landing Page',both:'Both'}[p.src]||'',
+    Source: {fb:'Facebook',page:'Landing Page',both:'Both',cal:'Calendar Booking'}[p.src]||'',
+    'Referred By': p.ref||'', 'Referral Type': p.ref ? (p.viaQR?'QR code':'Referral link') : '',
     Status: SLABEL[L.status]||L.status||'',
     'Human Touches': p.human.length, 'Auto Touches': p.auto.length,
     'Last Result': p.last ? (RES[p.last.result]?.[0]||'') : '',
